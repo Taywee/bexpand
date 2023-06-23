@@ -3,6 +3,10 @@
 /// doesn't work, so we have to reinvent some wheels.
 use std::cmp::Ordering;
 
+/// A checked add and sub trait that enforces uniform checked unsigned addition
+/// and subtraction. This allows a single trait to work for all contained types,
+/// whether they need `checked_add` and `checked_sub` or `checked_add_unsigned`
+/// and `checked_sub_unsigned`.
 pub trait CheckedAddSub: Copy + Clone {
     type Arithmetic: Copy + Clone;
 
@@ -10,6 +14,8 @@ pub trait CheckedAddSub: Copy + Clone {
     fn checked_sub(self, rhs: Self::Arithmetic) -> Option<Self>;
 }
 
+/// A type contained in a sequence.  In practice, this will only ever be `i64`
+/// or `char`, but it doesn't hurt to allow other types to work with it, too.
 pub trait SequenceItem: Copy + Clone {
     /// Unsigned incrementation type.
     type Arithmetic: Copy + Clone;
@@ -160,6 +166,7 @@ impl SequenceItem for u8 {
     type Proxy = u8;
 }
 
+/// A sequence with a start and end point, and an associated incr type.
 #[derive(Copy, Clone)]
 pub struct Sequence<T>
 where
@@ -233,23 +240,42 @@ mod tests {
             end: 10i64,
             incr: 1,
         };
-        let values: Vec<_> = sequence.into_iter().collect();
-        assert_eq!(
-            &values,
-            &[
-                Ok(1i64),
-                Ok(2),
-                Ok(3),
-                Ok(4),
-                Ok(5),
-                Ok(6),
-                Ok(7),
-                Ok(8),
-                Ok(9),
-                Ok(10)
-            ]
-        );
+        let values: Result<Vec<_>, _> = sequence.into_iter().collect();
+        assert_eq!(&values.unwrap(), &[1i64, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     }
+    #[test]
+    fn test_integers_incr() {
+        let sequence = Sequence {
+            start: 1i64,
+            end: 10i64,
+            incr: 2,
+        };
+        let values: Result<Vec<_>, _> = sequence.into_iter().collect();
+        assert_eq!(&values.unwrap(), &[1i64, 3, 5, 7, 9]);
+    }
+
+    #[test]
+    fn test_integers_rev() {
+        let sequence = Sequence {
+            start: 10i64,
+            end: 1i64,
+            incr: 1,
+        };
+        let values: Result<Vec<_>, _> = sequence.into_iter().collect();
+        assert_eq!(&values.unwrap(), &[10i64, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+    }
+
+    #[test]
+    fn test_integers_rev_incr() {
+        let sequence = Sequence {
+            start: 10i64,
+            end: 1i64,
+            incr: 2,
+        };
+        let values: Result<Vec<_>, _> = sequence.into_iter().collect();
+        assert_eq!(&values.unwrap(), &[10i64, 8, 6, 4, 2]);
+    }
+
     #[test]
     fn test_characters() {
         let sequence = Sequence {
@@ -257,10 +283,65 @@ mod tests {
             end: 'f',
             incr: 1,
         };
-        let values: Vec<_> = sequence.into_iter().collect();
+        let values: Result<Vec<_>, _> = sequence.into_iter().collect();
+        assert_eq!(&values.unwrap(), &['a', 'b', 'c', 'd', 'e', 'f']);
+    }
+
+    #[test]
+    fn test_characters_illegal() {
+        let sequence = Sequence {
+            start: '\u{D7FF}',
+            end: '\u{E000}',
+            incr: 1,
+        };
+        let values: Result<Vec<_>, _> = sequence.into_iter().collect();
+        assert!(&values.is_err());
+    }
+
+    #[test]
+    fn test_characters_skip_surrogate() {
+        let sequence = Sequence {
+            start: '\u{D000}',
+            end: '\u{10001}',
+            incr: 0x1000,
+        };
+        let values: Result<Vec<_>, _> = sequence.into_iter().collect();
         assert_eq!(
-            &values,
-            &[Ok('a'), Ok('b'), Ok('c'), Ok('d'), Ok('e'), Ok('f')]
+            &values.unwrap(),
+            &['\u{D000}', '\u{E000}', '\u{F000}', '\u{10000}']
         );
+    }
+
+    #[test]
+    fn test_characters_incr() {
+        let sequence = Sequence {
+            start: 'a',
+            end: 'f',
+            incr: 2,
+        };
+        let values: Result<Vec<_>, _> = sequence.into_iter().collect();
+        assert_eq!(&values.unwrap(), &['a', 'c', 'e']);
+    }
+
+    #[test]
+    fn test_characters_rev() {
+        let sequence = Sequence {
+            start: 'f',
+            end: 'a',
+            incr: 1,
+        };
+        let values: Result<Vec<_>, _> = sequence.into_iter().collect();
+        assert_eq!(&values.unwrap(), &['f', 'e', 'd', 'c', 'b', 'a']);
+    }
+
+    #[test]
+    fn test_characters_rev_incr() {
+        let sequence = Sequence {
+            start: 'f',
+            end: 'a',
+            incr: 2,
+        };
+        let values: Result<Vec<_>, _> = sequence.into_iter().collect();
+        assert_eq!(&values.unwrap(), &['f', 'd', 'b']);
     }
 }
