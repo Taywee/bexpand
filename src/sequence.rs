@@ -2,7 +2,7 @@
 /// Unfortunately, we can't just use a RangeInclusive here, because `char`
 /// doesn't work, so we have to reinvent some wheels.
 use std::cmp::Ordering;
-use std::fmt::{Debug, Write};
+use std::fmt::Debug;
 
 /// A checked add and sub trait that enforces uniform checked unsigned addition
 /// and subtraction. This allows a single trait to work for all contained types,

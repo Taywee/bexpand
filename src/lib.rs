@@ -1,7 +1,9 @@
-use std::fmt::{Debug, Write};
-use std::{borrow::Cow, char::CharTryFromError, convert::Infallible, fmt::Display, iter};
+use std::fmt::Debug;
+use std::str::FromStr;
+use std::{borrow::Cow, char::CharTryFromError, iter};
 
 use itertools::{Itertools, MultiProduct};
+use nom::error::{convert_error, VerboseError};
 
 mod parser;
 mod sequence;
@@ -9,6 +11,12 @@ mod sequence;
 /// {a,b,c}
 #[derive(Clone, Debug)]
 struct List<'a>(Vec<Part<'a>>);
+
+impl<'a> List<'a> {
+    fn into_owned(self) -> List<'static> {
+        List(self.0.into_iter().map(Part::into_owned).collect())
+    }
+}
 
 impl<'a> IntoIterator for List<'a> {
     type Item = Result<Cow<'a, str>, CharTryFromError>;
@@ -56,9 +64,41 @@ impl Iterator for SequenceIterator {
     }
 }
 
-/// Cartesian product expression.
+/// Bash-style brace expression. Can be created using TryFrom (like
+/// `"foo{bar,baz}biz".try_into()`) or via FromStr
+/// (`"foo{bar,baz}biz".parse()`). TryFrom is preferred, because it will avoid
+/// unnecessary allocations wherever possible, and tie to the lifetime of the
+/// incoming string. FromStr will make String clones in unnecessary places.
 #[derive(Clone, Debug)]
 pub struct Expression<'a>(Vec<Part<'a>>);
+
+impl<'a> Expression<'a> {
+    fn into_owned(self) -> Expression<'static> {
+        Expression(self.0.into_iter().map(Part::into_owned).collect())
+    }
+}
+
+impl FromStr for Expression<'static> {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let expression: Expression = s.try_into()?;
+        Ok(expression.into_owned())
+    }
+}
+
+impl<'a> TryFrom<&'a str> for Expression<'a> {
+    type Error = String;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        let output = parser::expression::<VerboseError<&str>>(value);
+        match output {
+            Ok((_, expression)) => Ok(expression),
+            Err(nom::Err::Error(e) | nom::Err::Failure(e)) => return Err(convert_error(value, e)),
+            _ => panic!("Somehow got an incomplete"),
+        }
+    }
+}
 
 impl<'a> IntoIterator for Expression<'a> {
     type Item = Result<Cow<'a, str>, CharTryFromError>;
@@ -81,9 +121,11 @@ impl<'a> Iterator for ExpressionIterator<'a> {
             0 => Ok(Cow::Borrowed("")),
             1 => parts.into_iter().next().unwrap(),
             _ => {
-                let mut string = String::new();
+                let parts: Result<Vec<_>, _> = parts.into_iter().collect();
+                let parts = parts?;
+                let mut string = String::with_capacity(parts.iter().map(|s| s.len()).sum());
                 for part in parts {
-                    write!(&mut string, "{}", part?).unwrap();
+                    string.push_str(&part);
                 }
                 Ok(Cow::Owned(string))
             }
@@ -97,6 +139,17 @@ enum Part<'a> {
     List(List<'a>),
     Sequence(Sequence),
     Expression(Expression<'a>),
+}
+
+impl<'a> Part<'a> {
+    fn into_owned(self) -> Part<'static> {
+        match self {
+            Part::Plain(part) => Part::Plain(Cow::Owned(part.into_owned())),
+            Part::List(part) => Part::List(part.into_owned()),
+            Part::Sequence(part) => Part::Sequence(part),
+            Part::Expression(part) => Part::Expression(part.into_owned()),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -137,49 +190,83 @@ impl<'a> Iterator for PartIterator<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
+
     #[test]
     fn test_simple_list() {
-        let list = List(vec![
-            Part::Plain("a".into()),
-            Part::Plain("b".into()),
-            Part::Plain("c".into()),
-        ]);
-
-        let values: Result<Vec<_>, _> = list.into_iter().collect();
-        assert_eq!(&values.unwrap(), &["a", "b", "c"]);
+        let expression: Expression = "{a,b,c}".try_into().unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected: Vec<_> = vec!["a", "b", "c"];
+        assert_eq!(generated.unwrap(), expected);
     }
 
     #[test]
-    fn test_compound_list() {
-        let list = List(vec![
-            Part::Plain("a".into()),
-            Part::List(List(vec![Part::Plain("b".into()), Part::Plain("c".into())])),
-            Part::Plain("d".into()),
-        ]);
-
-        let values: Result<Vec<_>, _> = list.into_iter().collect();
-        assert_eq!(&values.unwrap(), &["a", "b", "c", "d"]);
+    fn test_list_escapes() {
+        let expression: Expression = r"{a,b\,c,d\{e,f\}\\g}".try_into().unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected: Vec<_> = vec!["a", "b,c", "d{e", r"f}\g"];
+        assert_eq!(generated.unwrap(), expected);
     }
-
     #[test]
-    fn test_compound() {
-        let list = Expression(vec![
-            Part::Plain("a".into()),
-            Part::List(List(vec![Part::Plain("b".into()), Part::Plain("c".into())])),
-            Part::Plain("d".into()),
-            Part::Sequence(Sequence::Int(sequence::Sequence {
-                start: 1,
-                end: 2,
-                incr: 1,
-            })),
-            Part::Plain("e".into()),
-        ]);
-
-        let values: Result<Vec<_>, _> = list.into_iter().collect();
-        let compare = vec!["abd1e", "abd2e", "acd1e", "acd2e"];
-        assert_eq!(values.unwrap(), compare);
+    fn test_nested_list() {
+        let expression: Expression = r"s{a,b{c,d{e,f}g,h{i,j{k}l,m{}n}o}p,q}r"
+            .try_into()
+            .unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected: Vec<_> = vec![
+            "sar",
+            "sbcpr",
+            "sbdegpr",
+            "sbdfgpr",
+            "sbhiopr",
+            "sbhjklopr",
+            "sbhmnopr",
+            "sqr",
+        ];
+        assert_eq!(generated.unwrap(), expected);
+    }
+    #[test]
+    fn test_list_with_empty_part() {
+        let expression: Expression = "{a,,c}".try_into().unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected: Vec<_> = vec!["a", "", "c"];
+        assert_eq!(generated.unwrap(), expected);
+    }
+    #[test]
+    fn test_expression() {
+        let expression: Expression = "a{b,c,}d{1..2}e".try_into().unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec!["abd1e", "abd2e", "acd1e", "acd2e", "ad1e", "ad2e"];
+        assert_eq!(generated.unwrap(), expected);
+    }
+    #[test]
+    fn test_char_sequence() {
+        let expression: Expression = "a{d..f}g".try_into().unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec!["adg", "aeg", "afg"];
+        assert_eq!(generated.unwrap(), expected);
+    }
+    #[test]
+    fn test_negative_number_sequence() {
+        let expression: Expression = "a{-10..10..3}g".try_into().unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec!["a-10g", "a-7g", "a-4g", "a-1g", "a2g", "a5g", "a8g"];
+        assert_eq!(generated.unwrap(), expected);
+    }
+    #[test]
+    fn test_decreasing_negative_number_sequence() {
+        let expression: Expression = "a{-10..10..3}g".try_into().unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec!["a-10g", "a-7g", "a-4g", "a-1g", "a2g", "a5g", "a8g"];
+        assert_eq!(generated.unwrap(), expected);
+    }
+    #[test]
+    fn test_escaped_char_sequence() {
+        let expression: Expression = r"a{z..\}}b{\...\{..77}c".try_into().unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec![
+            "azb.c", "azb{c", "a{b.c", "a{b{c", "a|b.c", "a|b{c", "a}b.c", "a}b{c",
+        ];
+        assert_eq!(generated.unwrap(), expected);
     }
 }
