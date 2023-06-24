@@ -154,4 +154,14 @@ mod tests {
         let expected: Vec<_> = vec!["a", "", "c"];
         assert_eq!(generated.unwrap(), expected);
     }
+    #[test]
+    fn test_expression() {
+        let expression = expression("a{b,c,}d{1..2}e").unwrap().1;
+        let generated: Result<HashSet<_>, _> = expression.into_iter().collect();
+        let expected: HashSet<_> = ["abd1e", "acd1e", "abd2e", "acd2e", "ad1e", "ad2e"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        assert_eq!(generated.unwrap(), expected);
+    }
 }
