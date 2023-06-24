@@ -1,13 +1,14 @@
 [package]
 name = 'bexpand'
-version = '1.0.0'
+version = '1.0.1'
 edition = '2021'
 authors = ['Taylor C. Richberger <taywee@gmx.com>']
 description = 'Bash-style brace expansion'
 readme = 'README.md'
 license = 'MPL-2.0'
-keywords = ["parser", "shell", "template", "string"]
-categories = ["command-line-interface", "parser-implementations"]
+keywords = ['parser', 'shell', 'template', 'string']
+categories = ['command-line-interface', 'parser-implementations']
+repository = 'https://codeberg.org/Taywee/bexpand'
 
 [dependencies]
 itertools = '0.11.0'
