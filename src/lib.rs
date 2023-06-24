@@ -61,7 +61,7 @@ impl Iterator for SequenceIterator {
 pub struct Expression<'a>(Vec<Part<'a>>);
 
 impl<'a> IntoIterator for Expression<'a> {
-    type Item = Result<String, CharTryFromError>;
+    type Item = Result<Cow<'a, str>, CharTryFromError>;
 
     type IntoIter = ExpressionIterator<'a>;
 
@@ -74,15 +74,19 @@ impl<'a> IntoIterator for Expression<'a> {
 pub struct ExpressionIterator<'a>(MultiProduct<PartIterator<'a>>);
 
 impl<'a> Iterator for ExpressionIterator<'a> {
-    type Item = Result<String, CharTryFromError>;
+    type Item = Result<Cow<'a, str>, CharTryFromError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().map(|parts| {
-            let mut string = String::new();
-            for part in parts {
-                write!(&mut string, "{}", part?).unwrap();
+        self.0.next().map(|parts| match parts.len() {
+            0 => Ok(Cow::Borrowed("")),
+            1 => parts.into_iter().next().unwrap(),
+            _ => {
+                let mut string = String::new();
+                for part in parts {
+                    write!(&mut string, "{}", part?).unwrap();
+                }
+                Ok(Cow::Owned(string))
             }
-            Ok(string)
         })
     }
 }
@@ -126,7 +130,7 @@ impl<'a> Iterator for PartIterator<'a> {
             PartIterator::Plain(part) => part.next().map(|s| Ok(s)),
             PartIterator::List(part) => part.next(),
             PartIterator::Sequence(part) => part.next().map(|r| r.map(|s| Cow::Owned(s))),
-            PartIterator::Expression(part) => part.next().map(|r| r.map(|s| Cow::Owned(s))),
+            PartIterator::Expression(part) => part.next(),
         }
     }
 }
@@ -174,15 +178,8 @@ mod tests {
             Part::Plain("e".into()),
         ]);
 
-        let values: Result<HashSet<_>, _> = list.into_iter().collect();
-        let compare: HashSet<String> = [
-            String::from("abd1e"),
-            String::from("acd1e"),
-            String::from("abd2e"),
-            String::from("acd2e"),
-        ]
-        .into_iter()
-        .collect();
+        let values: Result<Vec<_>, _> = list.into_iter().collect();
+        let compare = vec!["abd1e", "abd2e", "acd1e", "acd2e"];
         assert_eq!(values.unwrap(), compare);
     }
 }
