@@ -139,8 +139,6 @@ pub fn expression(input: &str) -> IResult<&str, Expression<'_>> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
 
     #[test]
@@ -160,43 +158,38 @@ mod tests {
     #[test]
     fn test_expression() {
         let expression = expression("a{b,c,}d{1..2}e").unwrap().1;
-        let generated: Result<HashSet<_>, _> = expression.into_iter().collect();
-        let expected: HashSet<_> = ["abd1e", "acd1e", "abd2e", "acd2e", "ad1e", "ad2e"]
-            .into_iter()
-            .map(String::from)
-            .collect();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec!["abd1e", "abd2e", "acd1e", "acd2e", "ad1e", "ad2e"];
         assert_eq!(generated.unwrap(), expected);
     }
     #[test]
     fn test_char_sequence() {
         let expression = expression("a{d..f}g").unwrap().1;
-        let generated: Result<HashSet<_>, _> = expression.into_iter().collect();
-        let expected: HashSet<_> = ["adg", "aeg", "afg"]
-            .into_iter()
-            .map(String::from)
-            .collect();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec!["adg", "aeg", "afg"];
         assert_eq!(generated.unwrap(), expected);
     }
     #[test]
     fn test_negative_number_sequence() {
         let expression = expression("a{-10..10..3}g").unwrap().1;
-        let generated: Result<HashSet<_>, _> = expression.into_iter().collect();
-        let expected: HashSet<_> = ["a-10g", "a-7g", "a-4g", "a-1g", "a2g", "a5g", "a8g"]
-            .into_iter()
-            .map(String::from)
-            .collect();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec!["a-10g", "a-7g", "a-4g", "a-1g", "a2g", "a5g", "a8g"];
+        assert_eq!(generated.unwrap(), expected);
+    }
+    #[test]
+    fn test_decreasing_negative_number_sequence() {
+        let expression = expression("a{-10..10..3}g").unwrap().1;
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec!["a-10g", "a-7g", "a-4g", "a-1g", "a2g", "a5g", "a8g"];
         assert_eq!(generated.unwrap(), expected);
     }
     #[test]
     fn test_escaped_char_sequence() {
         let expression = expression(r"a{z..\}}b{\...\{..77}c").unwrap().1;
-        let generated: Result<HashSet<_>, _> = expression.into_iter().collect();
-        let expected: HashSet<_> = [
-            "azb{c", "a}b{c", "a{b{c", "a{b.c", "a}b.c", "azb.c", "a|b{c", "a|b.c",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec![
+            "azb.c", "azb{c", "a{b.c", "a{b{c", "a|b.c", "a|b{c", "a}b.c", "a}b{c",
+        ];
         assert_eq!(generated.unwrap(), expected);
     }
 }
