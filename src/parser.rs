@@ -178,6 +178,16 @@ mod tests {
         assert_eq!(generated.unwrap(), expected);
     }
     #[test]
+    fn test_negative_number_sequence() {
+        let expression = expression("a{-10..10..3}g").unwrap().1;
+        let generated: Result<HashSet<_>, _> = expression.into_iter().collect();
+        let expected: HashSet<_> = ["a-10g", "a-7g", "a-4g", "a-1g", "a2g", "a5g", "a8g"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        assert_eq!(generated.unwrap(), expected);
+    }
+    #[test]
     fn test_escaped_char_sequence() {
         let expression = expression(r"a{z..\}}b{\...\{..77}c").unwrap().1;
         let generated: Result<HashSet<_>, _> = expression.into_iter().collect();
