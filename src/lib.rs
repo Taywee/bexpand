@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::fmt::{Debug, Write};
 use std::{borrow::Cow, char::CharTryFromError, convert::Infallible, fmt::Display, iter};
 
 use itertools::{Itertools, MultiProduct};
@@ -7,7 +7,7 @@ mod parser;
 mod sequence;
 
 /// {a,b,c}
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct List<'a>(Vec<Part<'a>>);
 
 impl<'a> IntoIterator for List<'a> {
@@ -20,13 +20,13 @@ impl<'a> IntoIterator for List<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Sequence {
     Int(sequence::Sequence<i64>),
     Char(sequence::Sequence<char>),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum SequenceIterator {
     Int(sequence::SequenceIterator<i64>),
     Char(sequence::SequenceIterator<char>),
@@ -57,8 +57,8 @@ impl Iterator for SequenceIterator {
 }
 
 /// Cartesian product expression.
-#[derive(Clone)]
-struct Expression<'a>(Vec<Part<'a>>);
+#[derive(Clone, Debug)]
+pub struct Expression<'a>(Vec<Part<'a>>);
 
 impl<'a> IntoIterator for Expression<'a> {
     type Item = Result<String, CharTryFromError>;
@@ -70,8 +70,8 @@ impl<'a> IntoIterator for Expression<'a> {
     }
 }
 
-#[derive(Clone)]
-struct ExpressionIterator<'a>(MultiProduct<PartIterator<'a>>);
+#[derive(Clone, Debug)]
+pub struct ExpressionIterator<'a>(MultiProduct<PartIterator<'a>>);
 
 impl<'a> Iterator for ExpressionIterator<'a> {
     type Item = Result<String, CharTryFromError>;
@@ -87,7 +87,7 @@ impl<'a> Iterator for ExpressionIterator<'a> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Part<'a> {
     Plain(Cow<'a, str>),
     List(List<'a>),
@@ -95,7 +95,7 @@ enum Part<'a> {
     Expression(Expression<'a>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum PartIterator<'a> {
     Plain(iter::Once<Cow<'a, str>>),
     List(Box<<List<'a> as IntoIterator>::IntoIter>),
@@ -133,6 +133,8 @@ impl<'a> Iterator for PartIterator<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
     #[test]
     fn test_simple_list() {
@@ -156,5 +158,31 @@ mod tests {
 
         let values: Result<Vec<_>, _> = list.into_iter().collect();
         assert_eq!(&values.unwrap(), &["a", "b", "c", "d"]);
+    }
+
+    #[test]
+    fn test_compound() {
+        let list = Expression(vec![
+            Part::Plain("a".into()),
+            Part::List(List(vec![Part::Plain("b".into()), Part::Plain("c".into())])),
+            Part::Plain("d".into()),
+            Part::Sequence(Sequence::Int(sequence::Sequence {
+                start: 1,
+                end: 2,
+                incr: 1,
+            })),
+            Part::Plain("e".into()),
+        ]);
+
+        let values: Result<HashSet<_>, _> = list.into_iter().collect();
+        let compare: HashSet<String> = [
+            String::from("abd1e"),
+            String::from("acd1e"),
+            String::from("abd2e"),
+            String::from("acd2e"),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(values.unwrap(), compare);
     }
 }

@@ -2,13 +2,14 @@
 /// Unfortunately, we can't just use a RangeInclusive here, because `char`
 /// doesn't work, so we have to reinvent some wheels.
 use std::cmp::Ordering;
+use std::fmt::{Debug, Write};
 
 /// A checked add and sub trait that enforces uniform checked unsigned addition
 /// and subtraction. This allows a single trait to work for all contained types,
 /// whether they need `checked_add` and `checked_sub` or `checked_add_unsigned`
 /// and `checked_sub_unsigned`.
-pub trait CheckedAddSub: Copy + Clone {
-    type Arithmetic: Copy + Clone;
+pub trait CheckedAddSub: Copy + Clone + Debug {
+    type Arithmetic: Copy + Clone + Debug;
 
     fn checked_add(self, rhs: Self::Arithmetic) -> Option<Self>;
     fn checked_sub(self, rhs: Self::Arithmetic) -> Option<Self>;
@@ -16,9 +17,9 @@ pub trait CheckedAddSub: Copy + Clone {
 
 /// A type contained in a sequence.  In practice, this will only ever be `i64`
 /// or `char`, but it doesn't hurt to allow other types to work with it, too.
-pub trait SequenceItem: Copy + Clone {
+pub trait SequenceItem: Copy + Clone + Debug {
     /// Unsigned incrementation type.
-    type Arithmetic: Copy + Clone;
+    type Arithmetic: Copy + Clone + Debug;
 
     /// Arithmetic proxy type, because some types (like char) don't impl `Add`
     /// and `Sub` directly.
@@ -167,7 +168,7 @@ impl SequenceItem for u8 {
 }
 
 /// A sequence with a start and end point, and an associated incr type.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Sequence<T>
 where
     T: SequenceItem,
@@ -177,7 +178,7 @@ where
     pub incr: T::Arithmetic,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SequenceIterator<T>
 where
     T: SequenceItem,
