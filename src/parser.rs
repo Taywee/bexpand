@@ -118,18 +118,21 @@ fn sequence(input: &str) -> IResult<&str, Part<'_>> {
 }
 
 fn list_expression(input: &str) -> IResult<&str, Part<'_>> {
+    // A list expression may not be empty and may not contain any non-empty plain parts.
     let (input, parts) = many1(alt((sequence, list, list_plain)))(input)?;
     Ok((input, Part::Expression(Expression(parts))))
 }
 
 fn list(input: &str) -> IResult<&str, Part<'_>> {
     let (input, _) = tag("{")(input)?;
+    // A list may contain empty plain parts.
     let (input, items) = separated_list0(tag(","), alt((list_expression, empty_plain)))(input)?;
     let (input, _) = tag("}")(input)?;
     Ok((input, Part::List(List(items))))
 }
 
 pub fn expression(input: &str) -> IResult<&str, Expression<'_>> {
+    // A top level expression may be empty, and may not contain any non-empty plain parts
     let (input, parts) = all_consuming(many0(alt((sequence, list, top_plain))))(input)?;
     Ok((input, Expression(parts)))
 }
@@ -162,6 +165,28 @@ mod tests {
             .into_iter()
             .map(String::from)
             .collect();
+        assert_eq!(generated.unwrap(), expected);
+    }
+    #[test]
+    fn test_char_sequence() {
+        let expression = expression("a{d..f}g").unwrap().1;
+        let generated: Result<HashSet<_>, _> = expression.into_iter().collect();
+        let expected: HashSet<_> = ["adg", "aeg", "afg"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        assert_eq!(generated.unwrap(), expected);
+    }
+    #[test]
+    fn test_escaped_char_sequence() {
+        let expression = expression(r"a{z..\}}b{\...\{..77}c").unwrap().1;
+        let generated: Result<HashSet<_>, _> = expression.into_iter().collect();
+        let expected: HashSet<_> = [
+            "azb{c", "a}b{c", "a{b{c", "a{b.c", "a}b.c", "azb.c", "a|b{c", "a|b.c",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
         assert_eq!(generated.unwrap(), expected);
     }
 }
