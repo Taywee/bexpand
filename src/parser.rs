@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag},
-    character::complete::{anychar, i32, i64, none_of, one_of},
+    character::complete::{anychar, none_of, one_of, u32, u64},
     combinator::{all_consuming, complete, opt, success, verify},
     error::ParseError,
     multi::{many0, many1, separated_list0},
@@ -67,15 +67,13 @@ fn sequence_char<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str,
 
 fn number_sequence_incr<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u64, E> {
     let (input, _) = tag("..")(input)?;
-    let (input, incr) = i64(input)?;
-    let incr = incr.abs() as u64;
+    let (input, incr) = u64(input)?;
     let incr = if incr < 1 { 1 } else { incr };
     Ok((input, incr))
 }
 fn char_sequence_incr<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, u32, E> {
     let (input, _) = tag("..")(input)?;
-    let (input, incr) = i32(input)?;
-    let incr = incr.abs() as u32;
+    let (input, incr) = u32(input)?;
     let incr = if incr < 1 { 1 } else { incr };
     Ok((input, incr))
 }
