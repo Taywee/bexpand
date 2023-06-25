@@ -8,7 +8,7 @@ readme = 'README.md'
 license = 'MPL-2.0'
 keywords = ['parser', 'shell', 'template', 'string']
 categories = ['command-line-interface', 'parser-implementations']
-repository = 'https://codeberg.org/Taywee/bexpand'
+repository = 'https://github.com/Taywee/bexpand'
 
 [dependencies]
 itertools = '0.11.0'
