@@ -11,7 +11,7 @@ This does not 100% conform to Bash's style in the following ways:
   `abd}e acd}e` and `a{b{c,d}e` expands to `a{bce a{bde`. In bexpand, both are
   errors.
 * Empty and single-component lists are considered acceptable in bexpand.  In
-  bash, `a{}b` and `a{b}c` are both literally repeated by the shell.  In
+  Bash, `a{}b` and `a{b}c` are both literally repeated by the shell.  In
   bexpand, these expand to `ab` and `abc`.
 * bexpand allows character sequences to iterate any valid unicode codepoints.
   `{🥰..🥴..2}` is a valid character sequence, as is `{\{..\.}`, and `{9..A}`.
@@ -19,9 +19,13 @@ This does not 100% conform to Bash's style in the following ways:
   sequence, though it expands to the exact same thing as a numeric sequence of
   the same form.  Anything that would generate an illegal unicode codepoint will
   generate an error.
+* The width specifier is done with an equal sign at the beginning of the
+  opening brace instead, so in Bash, `{001..100}` is instead done in bexpand as
+  `{=1..100}`.  This is to allow things like `{=-5..10}`, which is impossible to
+  express in Bash.
 
 # License
 
-Copyright 2013 Taylor Richberger
+Copyright 2023 Taylor Richberger
 
 Published under the terms of the Mozilla Public License Version 2.0.
