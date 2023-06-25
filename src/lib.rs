@@ -69,11 +69,11 @@ impl Iterator for SequenceIterator {
         match self {
             SequenceIterator::Int { width, sequence } => {
                 sequence.next().map(|number| match *width {
-                    Some(width) => dbg!(Ok(format!(
+                    Some(width) => Ok(format!(
                         "{number:0width$}",
                         number = number.unwrap(),
                         width = width,
-                    ))),
+                    )),
                     None => Ok(number.unwrap().to_string()),
                 })
             }

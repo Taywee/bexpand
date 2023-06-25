@@ -96,9 +96,9 @@ fn number_sequence<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a st
         input,
         Part::Sequence(Sequence::Int {
             width: equal.map(|_| {
-                let start_width = dbg!(pre_start_len) - dbg!(post_start_len);
-                let end_width = dbg!(pre_end_len) - dbg!(post_end_len);
-                dbg!(start_width.max(dbg!(end_width)))
+                let start_width = pre_start_len - post_start_len;
+                let end_width = pre_end_len - post_end_len;
+                start_width.max(end_width)
             }),
             sequence: crate::sequence::Sequence {
                 start,
