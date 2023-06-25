@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag},
-    character::complete::{anychar, none_of, one_of, u32, u64},
+    character::complete::{anychar, i64, none_of, one_of, u32, u64},
     combinator::{all_consuming, complete, opt, success, verify},
     error::ParseError,
     multi::{many0, many1, separated_list0},
