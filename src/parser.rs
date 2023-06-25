@@ -82,18 +82,30 @@ fn char_sequence_incr<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a
 
 fn number_sequence<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Part<'_>, E> {
     let (input, _) = tag("{")(input)?;
+    let (input, equal) = opt(tag("="))(input)?;
+    let pre_start_len = input.len();
     let (input, start) = i64(input)?;
+    let post_start_len = input.len();
     let (input, _) = tag("..")(input)?;
+    let pre_end_len = input.len();
     let (input, end) = i64(input)?;
+    let post_end_len = input.len();
     let (input, incr) = opt(number_sequence_incr)(input)?;
     let (input, _) = tag("}")(input)?;
     Ok((
         input,
-        Part::Sequence(Sequence::Int(crate::sequence::Sequence {
-            start,
-            end,
-            incr: incr.unwrap_or(1),
-        })),
+        Part::Sequence(Sequence::Int {
+            width: equal.map(|_| {
+                let start_width = dbg!(pre_start_len) - dbg!(post_start_len);
+                let end_width = dbg!(pre_end_len) - dbg!(post_end_len);
+                dbg!(start_width.max(dbg!(end_width)))
+            }),
+            sequence: crate::sequence::Sequence {
+                start,
+                end,
+                incr: incr.unwrap_or(1),
+            },
+        }),
     ))
 }
 

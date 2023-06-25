@@ -30,13 +30,19 @@ impl<'a> IntoIterator for List<'a> {
 
 #[derive(Clone, Copy, Debug)]
 enum Sequence {
-    Int(sequence::Sequence<i64>),
+    Int {
+        width: Option<usize>,
+        sequence: sequence::Sequence<i64>,
+    },
     Char(sequence::Sequence<char>),
 }
 
 #[derive(Clone, Copy, Debug)]
 enum SequenceIterator {
-    Int(sequence::SequenceIterator<i64>),
+    Int {
+        width: Option<usize>,
+        sequence: sequence::SequenceIterator<i64>,
+    },
     Char(sequence::SequenceIterator<char>),
 }
 
@@ -47,7 +53,10 @@ impl IntoIterator for Sequence {
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
-            Sequence::Int(s) => SequenceIterator::Int(s.into_iter()),
+            Sequence::Int { width, sequence } => SequenceIterator::Int {
+                width,
+                sequence: sequence.into_iter(),
+            },
             Sequence::Char(s) => SequenceIterator::Char(s.into_iter()),
         }
     }
@@ -58,7 +67,16 @@ impl Iterator for SequenceIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            SequenceIterator::Int(i) => i.next().map(|r| Ok(r.unwrap().to_string())),
+            SequenceIterator::Int { width, sequence } => {
+                sequence.next().map(|number| match *width {
+                    Some(width) => dbg!(Ok(format!(
+                        "{number:0width$}",
+                        number = number.unwrap(),
+                        width = width,
+                    ))),
+                    None => Ok(number.unwrap().to_string()),
+                })
+            }
             SequenceIterator::Char(i) => i.next().map(|r| r.map(|c| c.to_string())),
         }
     }
@@ -199,6 +217,13 @@ mod tests {
         let expected: Vec<_> = vec!["a", "b", "c"];
         assert_eq!(generated.unwrap(), expected);
     }
+    #[test]
+    fn test_simple_list_empties() {
+        let expression: Expression = "{a,,,b,c}".try_into().unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected: Vec<_> = vec!["a", "", "", "b", "c"];
+        assert_eq!(generated.unwrap(), expected);
+    }
 
     #[test]
     fn test_list_escapes() {
@@ -209,12 +234,13 @@ mod tests {
     }
     #[test]
     fn test_nested_list() {
-        let expression: Expression = r"s{a,b{c,d{e,f}g,h{i,j{k}l,m{}n}o}p,q}r"
+        let expression: Expression = r"s{a,b{,c,d{e,f}g,h{i,j{k}l,m{}n}o}p,q}r"
             .try_into()
             .unwrap();
         let generated: Result<Vec<_>, _> = expression.into_iter().collect();
         let expected: Vec<_> = vec![
             "sar",
+            "sbpr",
             "sbcpr",
             "sbdegpr",
             "sbdfgpr",
@@ -267,6 +293,14 @@ mod tests {
         let expected = vec![
             "azb.c", "azb{c", "a{b.c", "a{b{c", "a|b.c", "a|b{c", "a}b.c", "a}b{c",
         ];
+        assert_eq!(generated.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_equal_width_negative() {
+        let expression: Expression = r"{=-1..1000..300}".try_into().unwrap();
+        let generated: Result<Vec<_>, _> = expression.into_iter().collect();
+        let expected = vec!["-001", "0299", "0599", "0899"];
         assert_eq!(generated.unwrap(), expected);
     }
 }
