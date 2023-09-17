@@ -28,6 +28,21 @@ impl<'a> IntoIterator for List<'a> {
     }
 }
 
+impl std::fmt::Display for List<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("{")?;
+        let mut parts = self.0.iter();
+        if let Some(part) = parts.next() {
+            write!(f, "{part}")?;
+        }
+        for part in parts {
+            write!(f, ",{part}")?;
+        }
+        f.write_str("}")?;
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Sequence {
     Int {
@@ -82,6 +97,42 @@ impl Iterator for SequenceIterator {
     }
 }
 
+impl std::fmt::Display for Sequence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("{")?;
+        match *self {
+            Self::Int {
+                width,
+                sequence: sequence::Sequence { start, end, incr },
+            } => {
+                if width.is_some() {
+                    f.write_str("=")?;
+                }
+                write!(f, "{start}..{end}")?;
+                if incr != 1 {
+                    write!(f, "..{incr}")?;
+                }
+            }
+            Self::Char(sequence::Sequence { start, end, incr }) => {
+                let escaped = ",.{}\\";
+                if escaped.contains(start) {
+                    f.write_str("\\")?;
+                }
+                write!(f, "{start}..")?;
+                if escaped.contains(end) {
+                    f.write_str("\\")?;
+                }
+                write!(f, "{end}")?;
+                if incr != 1 {
+                    write!(f, "..{incr}")?;
+                }
+            }
+        }
+        f.write_str("}")?;
+        Ok(())
+    }
+}
+
 /// Bash-style brace expression. Can be created using TryFrom (like
 /// `"foo{bar,baz}biz".try_into()`) or via FromStr
 /// (`"foo{bar,baz}biz".parse()`). TryFrom is preferred, because it will avoid
@@ -125,6 +176,15 @@ impl<'a> IntoIterator for Expression<'a> {
 
     fn into_iter(self) -> Self::IntoIter {
         ExpressionIterator(self.0.into_iter().multi_cartesian_product())
+    }
+}
+
+impl std::fmt::Display for Expression<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for part in &self.0 {
+            write!(f, "{part}")?;
+        }
+        Ok(())
     }
 }
 
@@ -203,6 +263,25 @@ impl<'a> Iterator for PartIterator<'a> {
             PartIterator::Sequence(part) => part.next().map(|r| r.map(|s| Cow::Owned(s))),
             PartIterator::Expression(part) => part.next(),
         }
+    }
+}
+
+impl std::fmt::Display for Part<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Plain(s) => {
+                for c in s.chars() {
+                    if ",{}\\".contains(c) {
+                        f.write_str("\\")?;
+                    }
+                    write!(f, "{c}")?;
+                }
+            }
+            Self::List(l) => write!(f, "{l}")?,
+            Self::Sequence(s) => write!(f, "{s}")?,
+            Self::Expression(e) => write!(f, "{e}")?,
+        }
+        Ok(())
     }
 }
 
@@ -302,5 +381,28 @@ mod tests {
         let generated: Result<Vec<_>, _> = expression.into_iter().collect();
         let expected = vec!["-001", "0299", "0599", "0899"];
         assert_eq!(generated.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_display() {
+        let test_cases = [
+            "{a,b,c}",
+            "{a,,,b,c}",
+            r"{a,b\,c,d\{e,f\}\\g}",
+            r"s{a,b{,c,d{e,f}g,h{i,j{k}l,m{}n}o}p,q}r",
+            "{a,,c}",
+            "a{b,c,}d{1..2}e",
+            "a{d..f}g",
+            "a{-10..10..3}g",
+            "a{-10..10..3}g",
+            r"a{z..\}}b{\...\{..77}c",
+            r"{=-1..1000..300}",
+        ];
+        for test_case in test_cases {
+            assert_eq!(
+                Expression::try_from(test_case).unwrap().to_string(),
+                test_case,
+            );
+        }
     }
 }
